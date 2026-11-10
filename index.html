@@ -1,188 +1,400 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QuickPrint Portal</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuickPrint</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='20' font-size='20'>🖨️</text></svg>">
+<style>
+  :root { --bg:#f1f5f9; --card:#fff; --ink:#1e293b; --muted:#64748b; --line:#e2e8f0;
+          --blue:#2563eb; --blue-d:#1d4ed8; --blue-l:#eff6ff; --green:#16a34a; --green-l:#dcfce7;
+          --amber:#b45309; --amber-l:#fef3c7; --red:#dc2626; --red-l:#fee2e2; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:18px; margin:0; }
+  header .conn { margin-left:auto; font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .dot { width:9px; height:9px; border-radius:50%; background:#cbd5e1; display:inline-block; }
+  .dot.ok { background:var(--green); } .dot.warn { background:#f59e0b; } .dot.bad { background:var(--red); }
+  main { max-width:1050px; margin:0 auto; padding:20px; display:grid; grid-template-columns: 1fr 360px; gap:20px; }
+  @media (max-width: 860px) { main { grid-template-columns:1fr; padding:12px; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px; }
+  .step + .step { margin-top:22px; }
+
+  /* printers */
+  .printers { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+  .printer { border:2px solid var(--line); border-radius:10px; padding:12px; cursor:pointer; text-align:left; background:#fff; font:inherit; color:inherit; }
+  .printer:hover { border-color:#93c5fd; }
+  .printer.sel { border-color:var(--blue); background:var(--blue-l); }
+  .printer .nm { font-weight:600; }
+  .printer .md { font-size:12px; color:var(--muted); margin:2px 0 8px; }
+  .pill { display:inline-block; font-size:12px; font-weight:600; padding:2px 8px; border-radius:99px; }
+  .pill.ok { background:var(--green-l); color:var(--green); }
+  .pill.warn { background:var(--amber-l); color:var(--amber); }
+  .pill.bad { background:var(--red-l); color:var(--red); }
+  .pill.busy { background:var(--blue-l); color:var(--blue); }
+  .printer .q { font-size:12px; color:var(--muted); margin-left:6px; }
+  .notice { margin-top:10px; padding:10px 12px; border-radius:8px; font-size:13px; background:var(--amber-l); color:#78350f; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .notice.bad { background:var(--red-l); color:#7f1d1d; }
+
+  /* drop zone */
+  #drop { border:2px dashed #cbd5e1; border-radius:10px; padding:26px; text-align:center; cursor:pointer; transition:.15s; }
+  #drop:hover, #drop.over { border-color:var(--blue); background:var(--blue-l); }
+  #drop .big { font-size:15px; font-weight:600; }
+  #drop .small { font-size:12px; color:var(--muted); margin-top:4px; }
+  .files { list-style:none; margin:10px 0 0; padding:0; }
+  .files li { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px solid var(--line); border-radius:8px; margin-top:6px; }
+  .files li .fn { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .files li .sz { color:var(--muted); font-size:12px; }
+  .files li.badf { border-color:#fca5a5; background:var(--red-l); }
+  .files li .why { font-size:12px; color:var(--red); }
+
+  /* options */
+  .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  label.f { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px; }
+  select, input[type=text], input[type=number] { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; }
+  select:focus, input:focus { outline:2px solid #bfdbfe; border-color:var(--blue); }
+  .stepper { display:flex; } .stepper button { width:36px; border:1px solid #cbd5e1; background:#f8fafc; font-size:16px; cursor:pointer; }
+  .stepper button:first-child { border-radius:8px 0 0 8px; } .stepper button:last-child { border-radius:0 8px 8px 0; }
+  .stepper input { border-radius:0; text-align:center; border-left:0; border-right:0; }
+  .chk { display:flex; align-items:center; gap:6px; margin-top:12px; font-size:13px; }
+
+  .btn { border:0; border-radius:8px; padding:10px 16px; font:inherit; font-weight:600; cursor:pointer; }
+  .btn.primary { background:var(--blue); color:#fff; width:100%; padding:13px; font-size:15px; margin-top:18px; }
+  .btn.primary:hover { background:var(--blue-d); }
+  .btn.primary:disabled { background:#94a3b8; cursor:not-allowed; }
+  .btn.sm { padding:4px 10px; font-size:12px; background:#f1f5f9; color:var(--ink); border:1px solid var(--line); }
+  .btn.sm:hover { background:#e2e8f0; }
+  .btn.sm.dark { background:#78350f; color:#fff; border:0; }
+  .linkbtn { background:none; border:0; color:var(--blue); cursor:pointer; font:inherit; padding:0; }
+
+  #result { margin-top:14px; }
+  .msg { padding:10px 12px; border-radius:8px; font-size:13px; margin-top:6px; }
+  .msg.ok { background:var(--green-l); color:#14532d; } .msg.bad { background:var(--red-l); color:#7f1d1d; }
+
+  /* queue */
+  .job { padding:9px 0; border-top:1px solid var(--line); display:flex; gap:8px; align-items:flex-start; }
+  .job:first-child { border-top:0; }
+  .job .jn { flex:1; min-width:0; }
+  .job .jt { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .job .js { font-size:12px; color:var(--muted); }
+  .empty { color:var(--muted); font-size:13px; padding:6px 0; }
+  aside .card + .card { margin-top:16px; }
+  #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transition:.2s; pointer-events:none; }
+  #toast.show { opacity:1; }
+</style>
 </head>
-<body class="bg-slate-50 min-h-screen flex items-center justify-center p-4 text-slate-800">
+<body>
+<header>
+  <span style="font-size:22px">🖨️</span><h1>QuickPrint</h1>
+  <span class="conn"><span id="connDot" class="dot"></span><span id="connText">Connecting…</span></span>
+</header>
 
-    <div class="bg-white rounded-xl shadow-lg p-8 max-w-lg w-full">
-        <h1 class="text-2xl font-bold text-center mb-6 text-slate-700">QuickPrint Portal</h1>
-
-        <div id="dropzone" class="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center cursor-pointer hover:bg-slate-50 transition-colors mb-6">
-            <svg class="mx-auto h-12 w-12 text-slate-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
-            </svg>
-            <p class="text-sm font-medium text-slate-600">Drag & Drop file here</p>
-            <p class="text-xs text-slate-400 mt-1">PDF, PNG, JPEG</p>
-            <input type="file" id="fileInput" class="hidden" accept=".pdf,image/*">
-        </div>
-
-        <form id="printForm" class="hidden space-y-4">
-            <div class="bg-blue-50 p-3 rounded-md mb-4 flex justify-between items-center">
-                <span id="fileNameDisplay" class="text-sm font-semibold text-blue-700 truncate"></span>
-                <button type="button" id="clearFile" class="text-blue-500 hover:text-blue-700 text-xs font-bold">✕</button>
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Printer</label>
-                <select id="printerSelect" class="w-full border-slate-300 rounded-md shadow-sm border p-2 text-sm focus:ring-blue-500 focus:border-blue-500" required>
-                    <option value="" disabled selected>Loading printers...</option>
-                </select>
-            </div>
-
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Copies</label>
-                    <input type="number" id="copiesInput" min="1" max="50" value="1" class="w-full border-slate-300 rounded-md shadow-sm border p-2 text-sm">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Color Mode</label>
-                    <select id="colorMode" class="w-full border-slate-300 rounded-md shadow-sm border p-2 text-sm">
-                        <option value="color">Color</option>
-                        <option value="grayscale">Grayscale</option>
-                    </select>
-                </div>
-            </div>
-
-            <div>
-                <label class="block text-sm font-medium text-slate-700 mb-1">Sides</label>
-                <select id="sidesSelect" class="w-full border-slate-300 rounded-md shadow-sm border p-2 text-sm">
-                    <option value="one-sided">Single Sided</option>
-                    <option value="two-sided-long-edge">Double Sided (Long Edge)</option>
-                    <option value="two-sided-short-edge">Double Sided (Short Edge)</option>
-                </select>
-            </div>
-
-            <button type="submit" id="printBtn" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-blue-700 transition-colors mt-4">
-                Print Document
-            </button>
-        </form>
-
-        <div id="statusMessage" class="mt-4 text-center text-sm font-medium hidden p-3 rounded-md"></div>
+<main>
+  <section class="card">
+    <div class="step">
+      <h2>1 · Printer</h2>
+      <div id="printers" class="printers"><div class="empty">Loading printers…</div></div>
+      <div id="printerNotice"></div>
     </div>
 
-    <script>
-        const dropzone = document.getElementById('dropzone');
-        const fileInput = document.getElementById('fileInput');
-        const printForm = document.getElementById('printForm');
-        const fileNameDisplay = document.getElementById('fileNameDisplay');
-        const clearFile = document.getElementById('clearFile');
-        const printerSelect = document.getElementById('printerSelect');
-        const statusMessage = document.getElementById('statusMessage');
-        const printBtn = document.getElementById('printBtn');
+    <div class="step">
+      <h2>2 · Files</h2>
+      <div id="drop" tabindex="0">
+        <div class="big">Drop files here, or click to choose</div>
+        <div class="small">PDF, JPG, PNG or TXT · several files at once · you can also paste a screenshot (Ctrl+V)</div>
+      </div>
+      <input type="file" id="fileInput" multiple accept=".pdf,.txt,.ps,image/*" hidden>
+      <ul id="files" class="files"></ul>
+    </div>
 
-        let currentFile = null;
+    <div class="step">
+      <h2>3 · Options</h2>
+      <div class="opts">
+        <div>
+          <label class="f" for="copies">Copies</label>
+          <div class="stepper">
+            <button type="button" data-d="-1">−</button>
+            <input type="number" id="copies" min="1" max="99" value="1">
+            <button type="button" data-d="1">+</button>
+          </div>
+        </div>
+        <div>
+          <label class="f" for="sides">Sides</label>
+          <select id="sides">
+            <option value="one-sided">Single sided</option>
+            <option value="two-sided-long-edge">Double sided (book)</option>
+            <option value="two-sided-short-edge">Double sided (flip up)</option>
+          </select>
+        </div>
+        <div>
+          <label class="f" for="pages">Pages (PDF only)</label>
+          <input type="text" id="pages" placeholder="All  ·  e.g. 1-3, 5">
+        </div>
+        <div>
+          <label class="f" for="orientation">Orientation</label>
+          <select id="orientation">
+            <option value="auto">Automatic</option>
+            <option value="portrait">Portrait</option>
+            <option value="landscape">Landscape</option>
+          </select>
+        </div>
+        <div id="colorWrap">
+          <label class="f" for="color">Colour</label>
+          <select id="color">
+            <option value="color">Colour</option>
+            <option value="grayscale">Black &amp; white</option>
+          </select>
+        </div>
+      </div>
+      <label class="chk"><input type="checkbox" id="fit" checked> Shrink to fit the page</label>
 
-        // Fetch Printers on Load
-        async function loadPrinters() {
-            try {
-                const res = await fetch('/printers');
-                if (!res.ok) throw new Error('Failed to connect to CUPS');
-                const data = await res.json();
-                
-                printerSelect.innerHTML = '';
-                if (data.printers.length === 0) {
-                    printerSelect.innerHTML = '<option disabled>No printers found</option>';
-                    return;
-                }
-                data.printers.forEach(p => {
-                    const opt = document.createElement('option');
-                    opt.value = p; opt.textContent = p;
-                    printerSelect.appendChild(opt);
-                });
-            } catch (err) {
-                printerSelect.innerHTML = '<option disabled>Error loading printers</option>';
-                showStatus('Error communicating with print server.', 'error');
-            }
-        }
-        loadPrinters();
+      <button id="printBtn" class="btn primary" disabled>Choose a file to print</button>
+      <div id="result"></div>
+    </div>
+  </section>
 
-        // Drag and Drop Logic
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-            dropzone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); });
-        });
+  <aside>
+    <div class="card">
+      <h2>In the queue</h2>
+      <div id="active"><div class="empty">—</div></div>
+    </div>
+    <div class="card">
+      <h2>Recently finished</h2>
+      <div id="recent"><div class="empty">—</div></div>
+    </div>
+  </aside>
+</main>
+<div id="toast"></div>
 
-        ['dragenter', 'dragover'].forEach(evt => {
-            dropzone.addEventListener(evt, () => dropzone.classList.add('border-blue-500', 'bg-blue-50'));
-        });
+<script>
+const $ = id => document.getElementById(id);
+const PREF = 'quickprint.prefs';
+let state = { printers: [], active: [], recent: [], can_admin: false, cups_url: '' };
+let selected = null;
+let files = [];
+const prefs = JSON.parse(localStorage.getItem(PREF) || '{}');
 
-        ['dragleave', 'drop'].forEach(evt => {
-            dropzone.addEventListener(evt, () => dropzone.classList.remove('border-blue-500', 'bg-blue-50'));
-        });
+const REASONS = {
+  'media-empty':'Out of paper', 'media-needed':'Load paper', 'media-jam':'Paper jam',
+  'toner-empty':'Toner empty', 'toner-low':'Toner low', 'marker-supply-empty':'Toner empty',
+  'marker-supply-low':'Toner low', 'door-open':'Door open', 'cover-open':'Cover open',
+  'offline-report':'Printer offline', 'connecting-to-device':'Can\'t reach printer',
+  'timed-out':'Can\'t reach printer', 'other':'Printer error'
+};
+const OK_EXT = ['pdf','jpg','jpeg','png','gif','tif','tiff','bmp','txt','ps'];
+const OFFICE_EXT = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','rtf'];
 
-        dropzone.addEventListener('drop', e => {
-            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                handleFile(e.dataTransfer.files[0]);
-            }
-        });
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2600); }
+function size(n) { return n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(n/1024))+' KB'; }
+function ago(ts) {
+  if (!ts) return '';
+  const s = Date.now()/1000 - ts;
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60)+' min ago';
+  if (s < 86400) return Math.floor(s/3600)+' h ago';
+  const d = new Date(ts*1000);
+  return d.toLocaleDateString(undefined, {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString(undefined, {hour:'2-digit', minute:'2-digit'});
+}
 
-        dropzone.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', e => {
-            if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
-        });
+function printerStatus(p) {
+  const problems = p.reasons.map(r => r.replace(/-(report|warning|error)$/, '')).map(r => REASONS[r]).filter(Boolean);
+  if (!p.accepting) return { cls:'bad', text:'Not accepting jobs' };
+  if (p.state === 'stopped') return { cls:'warn', text: problems[0] ? 'Paused · '+problems[0] : 'Paused' };
+  if (problems.length) return { cls: problems.some(t => /low/i.test(t)) ? 'warn' : 'bad', text: problems.join(', ') };
+  if (p.state === 'printing') return { cls:'busy', text:'Printing…' };
+  return { cls:'ok', text:'Ready' };
+}
 
-        function handleFile(file) {
-            currentFile = file;
-            fileNameDisplay.textContent = file.name;
-            dropzone.classList.add('hidden');
-            printForm.classList.remove('hidden');
-            hideStatus();
-        }
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok && !data.results) throw new Error(data.error || ('HTTP '+res.status));
+  return data;
+}
 
-        clearFile.addEventListener('click', () => {
-            currentFile = null;
-            fileInput.value = '';
-            printForm.classList.add('hidden');
-            dropzone.classList.remove('hidden');
-        });
+async function refresh() {
+  try {
+    state = await api('/api/status');
+    const stopped = state.printers.filter(p => p.state === 'stopped').length;
+    $('connDot').className = 'dot ' + (stopped ? 'warn' : 'ok');
+    $('connText').textContent = stopped ? stopped + ' printer(s) paused' : 'Print server online';
+  } catch (e) {
+    $('connDot').className = 'dot bad';
+    $('connText').textContent = 'Print server unreachable';
+    if (!state.printers.length) $('printers').innerHTML = '<div class="notice bad">Can\'t reach the print server. '+esc(e.message)+'</div>';
+    return;
+  }
+  if (!selected || !state.printers.find(p => p.name === selected)) {
+    const pref = state.printers.find(p => p.name === prefs.printer);
+    const ready = state.printers.find(p => p.state !== 'stopped');
+    selected = (pref || ready || state.printers[0] || {}).name || null;
+  }
+  renderPrinters(); renderQueue(); renderButton();
+}
 
-        // Form Submit Logic
-        printForm.addEventListener('submit', async e => {
-            e.preventDefault();
-            if (!currentFile || !printerSelect.value) return;
+function renderPrinters() {
+  if (!state.printers.length) { $('printers').innerHTML = '<div class="empty">No printers are set up on the print server.</div>'; return; }
+  $('printers').innerHTML = state.printers.map(p => {
+    const st = printerStatus(p);
+    const q = p.queued ? `<span class="q">${p.queued} waiting</span>` : '';
+    return `<button type="button" class="printer ${p.name===selected?'sel':''}" data-name="${esc(p.name)}">
+      <div class="nm">${esc(p.info)}</div><div class="md">${esc(p.model)}${p.location?' · '+esc(p.location):''}</div>
+      <span class="pill ${st.cls}">${esc(st.text)}</span>${q}</button>`;
+  }).join('');
+  const p = cur();
+  let n = '';
+  if (p && p.state === 'stopped') {
+    n = `<div class="notice"><span><b>${esc(p.info)} is paused.</b> New jobs will wait in the queue until it's resumed.</span>`;
+    n += state.can_admin
+      ? `<button class="btn sm dark" id="resumeBtn">Resume printer</button>`
+      : `<span>Ask the admin to resume it on the <a href="${esc(state.cups_url)}/printers/${encodeURIComponent(p.name)}" target="_blank">print server</a>.</span>`;
+    n += '</div>';
+  }
+  $('printerNotice').innerHTML = n;
+  if ($('resumeBtn')) $('resumeBtn').onclick = resume;
+  // options the printer can't do
+  $('sides').disabled = !(p && p.duplex);
+  if (!(p && p.duplex)) $('sides').value = 'one-sided';
+  $('colorWrap').style.display = p && p.color ? '' : 'none';
+}
 
-            const formData = new FormData();
-            formData.append('file', currentFile);
-            formData.append('printer', printerSelect.value);
-            formData.append('copies', document.getElementById('copiesInput').value);
-            formData.append('sides', document.getElementById('sidesSelect').value);
-            formData.append('color_mode', document.getElementById('colorMode').value);
+function cur() { return state.printers.find(p => p.name === selected); }
 
-            printBtn.disabled = true;
-            printBtn.textContent = 'Printing...';
-            hideStatus();
+function jobRow(j, active) {
+  const pr = state.printers.find(p => p.name === j.printer);
+  const pname = pr ? pr.info : j.printer;
+  const name = j.name || `Job ${j.id}`;
+  let st = { pending:'Waiting', held:'On hold', printing:'Printing…', stopped:'Stopped', canceled:'Cancelled', aborted:'Failed', completed:'Printed' }[j.state] || j.state;
+  if (j.state === 'pending' && j.reasons.includes('printer-stopped')) st = 'Waiting – printer paused';
+  const when = active ? ago(j.created) : ago(j.completed);
+  const cls = { completed:'ok', canceled:'warn', aborted:'bad', printing:'busy' }[j.state] || 'warn';
+  const cancel = active ? `<button class="btn sm" data-cancel="${j.id}" data-printer="${esc(j.printer)}">Cancel</button>` : '';
+  return `<div class="job"><div class="jn"><div class="jt" title="${esc(name)}">${esc(name)}</div>
+    <div class="js"><span class="pill ${cls}">${esc(st)}</span> ${esc(pname)} · ${esc(when)}</div></div>${cancel}</div>`;
+}
 
-            try {
-                const res = await fetch('/print', { method: 'POST', body: formData });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    showStatus('Success! Job sent to printer.', 'success');
-                    setTimeout(() => clearFile.click(), 3000); // Reset after 3 sec
-                } else {
-                    showStatus(data.detail || 'Print failed.', 'error');
-                }
-            } catch (err) {
-                showStatus('Network error occurred.', 'error');
-            } finally {
-                printBtn.disabled = false;
-                printBtn.textContent = 'Print Document';
-            }
-        });
+function renderQueue() {
+  $('active').innerHTML = state.active.length ? state.active.map(j => jobRow(j, true)).join('') : '<div class="empty">Nothing waiting. 👍</div>';
+  $('recent').innerHTML = state.recent.length ? state.recent.map(j => jobRow(j, false)).join('') : '<div class="empty">No finished jobs yet.</div>';
+}
 
-        function showStatus(msg, type) {
-            statusMessage.textContent = msg;
-            statusMessage.className = `mt-4 text-center text-sm font-medium p-3 rounded-md block ${
-                type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`;
-        }
+function ext(n) { return (n.split('.').pop() || '').toLowerCase(); }
+function fileProblem(f) {
+  const e = ext(f.name);
+  if (OFFICE_EXT.includes(e)) return 'Save it as PDF first (File › Save as › PDF)';
+  if (!OK_EXT.includes(e)) return 'Unsupported type – use PDF, image or TXT';
+  if (!f.size) return 'File is empty';
+  return '';
+}
 
-        function hideStatus() {
-            statusMessage.classList.add('hidden');
-        }
-    </script>
+function addFiles(list) {
+  for (const f of list) if (!files.some(x => x.name === f.name && x.size === f.size)) files.push(f);
+  $('result').innerHTML = '';
+  renderFiles();
+}
+
+function renderFiles() {
+  $('files').innerHTML = files.map((f, i) => {
+    const why = fileProblem(f);
+    return `<li class="${why?'badf':''}"><span>${ext(f.name)==='pdf'?'📄':/^(jpe?g|png|gif|bmp|tiff?)$/.test(ext(f.name))?'🖼️':'📃'}</span>
+      <span class="fn">${esc(f.name)}${why?`<div class="why">${esc(why)}</div>`:''}</span>
+      <span class="sz">${size(f.size)}</span><button class="linkbtn" data-rm="${i}" title="Remove">✕</button></li>`;
+  }).join('');
+  renderButton();
+}
+
+function renderButton() {
+  const good = files.filter(f => !fileProblem(f));
+  const b = $('printBtn');
+  const p = cur();
+  if (b.dataset.busy) return;
+  b.disabled = !good.length || !p;
+  if (!p) b.textContent = 'No printer available';
+  else if (!good.length) b.textContent = files.length ? 'Nothing printable selected' : 'Choose a file to print';
+  else b.textContent = `Print ${good.length > 1 ? good.length+' files' : '“'+good[0].name+'”'} on ${p.info}`;
+}
+
+async function doPrint() {
+  const good = files.filter(f => !fileProblem(f));
+  if (!good.length || !selected) return;
+  const fd = new FormData();
+  good.forEach(f => fd.append('file', f, f.name));
+  fd.append('printer', selected);
+  fd.append('copies', $('copies').value || 1);
+  fd.append('sides', $('sides').disabled ? 'one-sided' : $('sides').value);
+  fd.append('color_mode', $('color').value);
+  fd.append('pages', $('pages').value);
+  fd.append('orientation', $('orientation').value);
+  fd.append('fit', $('fit').checked ? '1' : '0');
+  savePrefs();
+  const b = $('printBtn');
+  b.dataset.busy = 1; b.disabled = true; b.textContent = 'Sending…';
+  try {
+    const data = await api('/api/print', { method:'POST', body: fd });
+    const ok = data.results.filter(r => r.ok), bad = data.results.filter(r => !r.ok);
+    let html = '';
+    if (ok.length) html += `<div class="msg ok">✓ Sent ${ok.length} file${ok.length>1?'s':''} to ${esc(cur().info)}${cur().state==='stopped'?' – it will print once the printer is resumed':''}.</div>`;
+    bad.forEach(r => html += `<div class="msg bad">✕ ${esc(r.file)}: ${esc(r.error)}</div>`);
+    $('result').innerHTML = html;
+    if (ok.length) { files = files.filter(f => !ok.some(r => r.file === f.name)); $('pages').value = ''; renderFiles(); }
+    refresh();
+  } catch (e) {
+    $('result').innerHTML = `<div class="msg bad">✕ ${esc(e.message)}</div>`;
+  } finally {
+    delete b.dataset.busy; renderButton();
+  }
+}
+
+async function cancelJob(id, printer, btn) {
+  if (!confirm('Cancel this print job?')) return;
+  btn.disabled = true;
+  try { const r = await api(`/api/jobs/${id}/cancel`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({printer}) }); toast(r.message); }
+  catch (e) { toast(e.message); btn.disabled = false; }
+  refresh();
+}
+
+async function resume() {
+  const p = cur(); $('resumeBtn').disabled = true;
+  try { const r = await api(`/api/printers/${encodeURIComponent(p.name)}/resume`, { method:'POST' }); toast(r.message); }
+  catch (e) { toast(e.message); }
+  refresh();
+}
+
+function savePrefs() {
+  localStorage.setItem(PREF, JSON.stringify({ printer: selected, sides: $('sides').value, color: $('color').value, fit: $('fit').checked, orientation: $('orientation').value }));
+}
+
+// ---- wiring ----
+$('printers').addEventListener('click', e => { const el = e.target.closest('.printer'); if (el) { selected = el.dataset.name; savePrefs(); renderPrinters(); renderButton(); } });
+$('drop').addEventListener('click', () => $('fileInput').click());
+$('drop').addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('fileInput').click(); } });
+$('fileInput').addEventListener('change', e => { addFiles(e.target.files); e.target.value = ''; });
+['dragenter','dragover'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+['dragleave','drop'].forEach(t => $('drop').addEventListener(t, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+$('drop').addEventListener('drop', e => addFiles(e.dataTransfer.files));
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); });
+document.addEventListener('paste', e => {
+  const imgs = [...e.clipboardData.items].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
+  if (imgs.length) addFiles(imgs.map((f, i) => new File([f], `pasted-${new Date().toTimeString().slice(0,8).replace(/:/g,'')}${i?'-'+i:''}.png`, {type: f.type})));
+});
+$('files').addEventListener('click', e => { const i = e.target.dataset.rm; if (i !== undefined) { files.splice(+i, 1); renderFiles(); } });
+document.querySelectorAll('.stepper button').forEach(b => b.onclick = () => { const c = $('copies'); c.value = Math.min(99, Math.max(1, (+c.value || 1) + +b.dataset.d)); });
+$('printBtn').addEventListener('click', doPrint);
+document.querySelector('aside').addEventListener('click', e => { const b = e.target.closest('[data-cancel]'); if (b) cancelJob(b.dataset.cancel, b.dataset.printer, b); });
+
+if (prefs.sides) $('sides').value = prefs.sides;
+if (prefs.color) $('color').value = prefs.color;
+if (prefs.orientation) $('orientation').value = prefs.orientation;
+if (prefs.fit === false) $('fit').checked = false;
+
+refresh();
+setInterval(() => { if (!document.hidden) refresh(); }, 5000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+</script>
 </body>
 </html>
