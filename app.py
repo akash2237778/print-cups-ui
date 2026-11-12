@@ -104,6 +104,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    STATIC_TYPES = {".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css"}
+
+    def _static(self, path):
+        root = os.path.join(HERE, "static")
+        full = os.path.realpath(os.path.join(root, unquote(path[len("/static/"):])))
+        ctype = self.STATIC_TYPES.get(os.path.splitext(full)[1])
+        if not ctype or not full.startswith(os.path.realpath(root) + os.sep) or not os.path.isfile(full):
+            return self._error(404, "Not found")
+        with open(full, "rb") as f:
+            data = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=604800")
+        self.end_headers()
+        self.wfile.write(data)
+
     def _error(self, code, message):
         self._send(code, {"error": message})
 
@@ -122,6 +139,8 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "index.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
+            if path.startswith("/static/"):
+                return self._static(path)
             if path == "/healthz":
                 return self._send(200, {"ok": True})
             if path == "/api/status":

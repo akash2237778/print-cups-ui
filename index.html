@@ -81,6 +81,44 @@
   .job .js { font-size:12px; color:var(--muted); }
   .empty { color:var(--muted); font-size:13px; padding:6px 0; }
   aside .card + .card { margin-top:16px; }
+  .files li .thumb { width:34px; height:34px; object-fit:cover; border-radius:4px; border:1px solid var(--line); }
+  .files li .ic { width:34px; text-align:center; font-size:20px; }
+  .actions { display:flex; gap:10px; margin-top:18px; }
+  .actions .btn.primary { margin-top:0; flex:1; }
+  .btn.secondary { background:#fff; color:var(--blue); border:1.5px solid var(--blue); padding:13px 18px; font-size:15px; }
+  .btn.secondary:hover { background:var(--blue-l); }
+  .btn.secondary:disabled { color:#94a3b8; border-color:#cbd5e1; background:#fff; cursor:not-allowed; }
+
+  /* preview modal */
+  .pv { position:fixed; inset:0; background:rgba(15,23,42,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .pv[hidden] { display:none; }
+  .pv-box { background:var(--card); border-radius:12px; width:min(900px,100%); height:min(92vh,1100px); display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,.3); }
+  .pv-head, .pv-foot { display:flex; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--line); }
+  .pv-foot { border-bottom:0; border-top:1px solid var(--line); flex-wrap:wrap; }
+  .pv-title { flex:1; min-width:0; font-weight:600; }
+  .pv-title #pvName { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pv-count { font-size:12px; color:var(--muted); font-weight:400; }
+  .pv-x { font-size:18px; color:var(--muted); padding:4px 8px; }
+  .pv-opts { flex:1; min-width:200px; font-size:12px; color:var(--muted); }
+  .pv-print { background:var(--blue); color:#fff; }
+  .pv-print:hover { background:var(--blue-d); }
+  .pv-body { flex:1; background:#e2e8f0; overflow:auto; display:flex; flex-direction:column; align-items:center; padding:16px; min-height:0; }
+  .pv-body iframe { flex:1; width:100%; border:0; background:#fff; border-radius:4px; min-height:300px; }
+  .pv-body.gray iframe, .pv-body.gray .sheet, .pv-body.gray .pdfpage canvas { filter:grayscale(1); }
+  .pdfpage { margin-bottom:14px; text-align:center; flex-shrink:0; }
+  .pdfpage canvas { background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.15); display:block; max-width:100%; height:auto; }
+  .pv-pn { font-size:11px; color:var(--muted); margin-top:4px; }
+  .pv-info { font-size:13px; background:#fff; border-radius:8px; padding:8px 12px; margin-bottom:14px; flex-shrink:0; }
+  .pv-info.warn { background:var(--amber-l); color:#78350f; }
+  .pv-hint { font-size:12px; color:var(--muted); margin-top:8px; }
+  .sheet { background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.15); aspect-ratio:210/297; width:min(100%,560px); padding:4%; display:flex; align-items:flex-start; justify-content:center; overflow:hidden; flex-shrink:0; }
+  .pv-body.land .sheet { aspect-ratio:297/210; width:min(100%,800px); }
+  .sheet.fit { align-items:center; }
+  .sheet img { max-width:100%; }
+  .sheet.fit img { max-height:100%; object-fit:contain; }
+  .sheet.txt { aspect-ratio:auto; min-height:70vh; height:auto; overflow:visible; }
+  .sheet pre { margin:0; width:100%; font:12px/1.4 ui-monospace,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
+  @media (max-width: 600px) { .pv { padding:0; } .pv-box { height:100%; border-radius:0; } .actions { flex-direction:column-reverse; } }
   #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transition:.2s; pointer-events:none; }
   #toast.show { opacity:1; }
 </style>
@@ -150,7 +188,10 @@
       </div>
       <label class="chk"><input type="checkbox" id="fit" checked> Shrink to fit the page</label>
 
-      <button id="printBtn" class="btn primary" disabled>Choose a file to print</button>
+      <div class="actions">
+        <button id="previewBtn" class="btn secondary" disabled title="See the files before printing">👁 Preview</button>
+        <button id="printBtn" class="btn primary" disabled>Choose a file to print</button>
+      </div>
       <div id="result"></div>
     </div>
   </section>
@@ -166,6 +207,22 @@
     </div>
   </aside>
 </main>
+<div id="pv" class="pv" hidden>
+  <div class="pv-box" role="dialog" aria-modal="true" aria-labelledby="pvName">
+    <div class="pv-head">
+      <button id="pvPrev" class="btn sm" title="Previous file (←)">‹</button>
+      <div class="pv-title"><div id="pvName"></div><div id="pvCount" class="pv-count"></div></div>
+      <button id="pvNext" class="btn sm" title="Next file (→)">›</button>
+      <button id="pvClose" class="linkbtn pv-x" title="Close (Esc)">✕</button>
+    </div>
+    <div id="pvBody" class="pv-body"></div>
+    <div class="pv-foot">
+      <div id="pvOpts" class="pv-opts"></div>
+      <button id="pvBack" class="btn sm">Back</button>
+      <button id="pvPrint" class="btn pv-print">Print</button>
+    </div>
+  </div>
+</div>
 <div id="toast"></div>
 
 <script>
@@ -297,14 +354,136 @@ function addFiles(list) {
   renderFiles();
 }
 
+const IMG_RE = /^(jpe?g|png|gif|bmp)$/;
+function kind(f) { const e = ext(f.name); return e === 'pdf' ? 'pdf' : IMG_RE.test(e) ? 'img' : e === 'txt' ? 'txt' : ''; }
+function urlFor(f) { if (!f._url) f._url = URL.createObjectURL(f); return f._url; }
+
 function renderFiles() {
   $('files').innerHTML = files.map((f, i) => {
-    const why = fileProblem(f);
-    return `<li class="${why?'badf':''}"><span>${ext(f.name)==='pdf'?'📄':/^(jpe?g|png|gif|bmp|tiff?)$/.test(ext(f.name))?'🖼️':'📃'}</span>
+    const why = fileProblem(f), k = kind(f);
+    const icon = k === 'img' ? `<img class="thumb" src="${urlFor(f)}" alt="">` : `<span class="ic">${k==='pdf'?'📄':'📃'}</span>`;
+    const prev = !why && k ? `<button class="btn sm" data-preview="${i}" title="Preview">👁 Preview</button>` : '';
+    return `<li class="${why?'badf':''}">${icon}
       <span class="fn">${esc(f.name)}${why?`<div class="why">${esc(why)}</div>`:''}</span>
-      <span class="sz">${size(f.size)}</span><button class="linkbtn" data-rm="${i}" title="Remove">✕</button></li>`;
+      <span class="sz">${size(f.size)}</span>${prev}<button class="linkbtn" data-rm="${i}" title="Remove">✕</button></li>`;
   }).join('');
   renderButton();
+}
+
+// ---- print preview ----
+let pvIndex = -1;
+function previewable() { return files.filter(f => !fileProblem(f) && kind(f)); }
+
+function optionSummary(k) {
+  const p = cur(), c = +$('copies').value || 1;
+  const bits = [c > 1 ? `${c} copies` : '1 copy'];
+  bits.push({ 'one-sided':'Single sided', 'two-sided-long-edge':'Double sided (book)', 'two-sided-short-edge':'Double sided (flip up)' }[$('sides').disabled ? 'one-sided' : $('sides').value]);
+  if (k === 'pdf') bits.push($('pages').value.trim() ? 'Pages ' + $('pages').value.trim() : 'All pages');
+  if ($('orientation').value !== 'auto') bits.push($('orientation').value[0].toUpperCase() + $('orientation').value.slice(1));
+  bits.push(isGray() ? 'Black & white' : 'Colour');
+  if ($('fit').checked) bits.push('Fit to page');
+  return bits.join(' · ') + (p ? ` · on ${p.info}` : '');
+}
+function isGray() { const p = cur(); return !p || !p.color || $('color').value === 'grayscale'; }
+
+async function openPreview(f) {
+  const list = previewable();
+  pvIndex = list.indexOf(f);
+  if (pvIndex < 0) return;
+  $('pv').hidden = false;
+  document.body.style.overflow = 'hidden';
+  await showPreview();
+}
+
+async function showPreview() {
+  const list = previewable();
+  if (!list.length) return closePreview();
+  pvIndex = Math.max(0, Math.min(pvIndex, list.length - 1));
+  const f = list[pvIndex], k = kind(f), url = urlFor(f);
+  $('pvName').textContent = f.name;
+  $('pvCount').textContent = list.length > 1 ? `${pvIndex + 1} / ${list.length}` : '';
+  $('pvPrev').hidden = $('pvNext').hidden = list.length < 2;
+  $('pvOpts').textContent = optionSummary(k);
+  const body = $('pvBody');
+  body.className = 'pv-body' + (isGray() ? ' gray' : '') + ($('orientation').value === 'landscape' ? ' land' : '');
+  if (k === 'pdf') {
+    await renderPdf(f, url, body);
+  } else if (k === 'img') {
+    body.innerHTML = `<div class="sheet ${$('fit').checked ? 'fit' : ''}"><img src="${url}" alt="${esc(f.name)}"></div>`;
+    // fit the whole sheet in the window, like a real print preview
+    const ratio = $('orientation').value === 'landscape' ? 297 / 210 : 210 / 297;
+    const w = Math.min(body.clientWidth - 32, (body.clientHeight - 32) * ratio);
+    body.firstElementChild.style.width = Math.max(200, w) + 'px';
+  } else {
+    const text = await f.text();
+    body.innerHTML = `<div class="sheet txt"><pre>${esc(text.slice(0, 200000))}</pre></div>`;
+  }
+}
+
+let pdfjs = null, pvToken = 0;
+const MAX_PREVIEW_PAGES = 30;
+
+function pagesToPrint(total) {
+  const txt = $('pages').value.replace(/\s/g, '');
+  if (!txt) return Array.from({ length: total }, (_, i) => i + 1);
+  const set = new Set();
+  for (const part of txt.split(',')) {
+    const m = part.match(/^(\d+)(?:-(\d+))?$/);
+    if (!m) throw new Error(`Page range "${$('pages').value}" is not valid – use e.g. 1-3, 5`);
+    const a = +m[1], b = +(m[2] || m[1]);
+    for (let p = a; p <= Math.min(b, total); p++) set.add(p);
+  }
+  return [...set].sort((x, y) => x - y);
+}
+
+async function renderPdf(f, url, body) {
+  const token = ++pvToken;
+  body.innerHTML = '<div class="pv-hint">Loading preview…</div>';
+  try {
+    if (!pdfjs) {
+      pdfjs = await import('/static/pdfjs/pdf.min.mjs');
+      pdfjs.GlobalWorkerOptions.workerSrc = '/static/pdfjs/pdf.worker.min.mjs';
+    }
+    if (!f._pdf) f._pdf = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+    const doc = f._pdf;
+    const pages = pagesToPrint(doc.numPages);
+    if (token !== pvToken) return;
+    const sheetsPerCopy = $('sides').value !== 'one-sided' && !$('sides').disabled ? Math.ceil(pages.length / 2) : pages.length;
+    const copies = +$('copies').value || 1;
+    let head = `<div class="pv-info">PDF has ${doc.numPages} page${doc.numPages > 1 ? 's' : ''} · printing ${pages.length}` +
+      ` → about ${sheetsPerCopy * copies} sheet${sheetsPerCopy * copies === 1 ? '' : 's'} of paper</div>`;
+    if (!pages.length) head = `<div class="pv-info warn">No pages match "${esc($('pages').value)}" – this PDF has ${doc.numPages} page(s).</div>`;
+    body.innerHTML = head;
+    const width = Math.min(body.clientWidth - 32, 760);
+    for (const n of pages.slice(0, MAX_PREVIEW_PAGES)) {
+      if (token !== pvToken) return;
+      const page = await doc.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: (width / base.width) * (window.devicePixelRatio || 1) });
+      const c = document.createElement('canvas');
+      c.width = vp.width; c.height = vp.height;
+      c.style.width = width + 'px';
+      const wrap = document.createElement('div');
+      wrap.className = 'pdfpage';
+      wrap.append(c);
+      const lbl = document.createElement('div');
+      lbl.className = 'pv-pn'; lbl.textContent = `Page ${n}`;
+      wrap.append(lbl);
+      body.append(wrap);
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    }
+    if (pages.length > MAX_PREVIEW_PAGES)
+      body.insertAdjacentHTML('beforeend', `<div class="pv-hint">Showing the first ${MAX_PREVIEW_PAGES} of ${pages.length} pages.</div>`);
+  } catch (e) {
+    if (token !== pvToken) return;
+    body.innerHTML = `<div class="pv-info warn">${esc(e.message || 'Could not show this PDF.')}</div>
+      <div class="pv-hint"><a href="${url}" target="_blank" rel="noopener">Open the PDF in a new tab</a></div>`;
+  }
+}
+
+function closePreview() {
+  pvToken++;
+  $('pv').hidden = true; $('pvBody').innerHTML = ''; document.body.style.overflow = '';
 }
 
 function renderButton() {
@@ -313,6 +492,7 @@ function renderButton() {
   const p = cur();
   if (b.dataset.busy) return;
   b.disabled = !good.length || !p;
+  $('previewBtn').disabled = !previewable().length;
   if (!p) b.textContent = 'No printer available';
   else if (!good.length) b.textContent = files.length ? 'Nothing printable selected' : 'Choose a file to print';
   else b.textContent = `Print ${good.length > 1 ? good.length+' files' : '“'+good[0].name+'”'} on ${p.info}`;
@@ -382,7 +562,24 @@ document.addEventListener('paste', e => {
   const imgs = [...e.clipboardData.items].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()).filter(Boolean);
   if (imgs.length) addFiles(imgs.map((f, i) => new File([f], `pasted-${new Date().toTimeString().slice(0,8).replace(/:/g,'')}${i?'-'+i:''}.png`, {type: f.type})));
 });
-$('files').addEventListener('click', e => { const i = e.target.dataset.rm; if (i !== undefined) { files.splice(+i, 1); renderFiles(); } });
+$('files').addEventListener('click', e => {
+  const rm = e.target.closest('[data-rm]'), pv = e.target.closest('[data-preview]');
+  if (rm) { const [f] = files.splice(+rm.dataset.rm, 1); if (f && f._url) URL.revokeObjectURL(f._url); renderFiles(); }
+  if (pv) openPreview(files[+pv.dataset.preview]);
+});
+$('previewBtn').addEventListener('click', () => { const l = previewable(); if (l.length) openPreview(l[0]); });
+$('pvClose').addEventListener('click', closePreview);
+$('pvBack').addEventListener('click', closePreview);
+$('pv').addEventListener('click', e => { if (e.target.id === 'pv') closePreview(); });
+$('pvPrev').addEventListener('click', () => { pvIndex--; if (pvIndex < 0) pvIndex = previewable().length - 1; showPreview(); });
+$('pvNext').addEventListener('click', () => { pvIndex = (pvIndex + 1) % previewable().length; showPreview(); });
+$('pvPrint').addEventListener('click', () => { closePreview(); doPrint(); });
+document.addEventListener('keydown', e => {
+  if ($('pv').hidden) return;
+  if (e.key === 'Escape') closePreview();
+  if (e.key === 'ArrowRight' && previewable().length > 1) $('pvNext').click();
+  if (e.key === 'ArrowLeft' && previewable().length > 1) $('pvPrev').click();
+});
 document.querySelectorAll('.stepper button').forEach(b => b.onclick = () => { const c = $('copies'); c.value = Math.min(99, Math.max(1, (+c.value || 1) + +b.dataset.d)); });
 $('printBtn').addEventListener('click', doPrint);
 document.querySelector('aside').addEventListener('click', e => { const b = e.target.closest('[data-cancel]'); if (b) cancelJob(b.dataset.cancel, b.dataset.printer, b); });
