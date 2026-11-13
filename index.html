@@ -55,6 +55,7 @@
 
   /* options */
   .opts { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .hint { font-size:12px; color:var(--muted); margin-top:4px; }
   label.f { display:block; font-size:12px; font-weight:600; color:var(--muted); margin-bottom:4px; }
   select, input[type=text], input[type=number] { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font:inherit; background:#fff; }
   select:focus, input:focus { outline:2px solid #bfdbfe; border-color:var(--blue); }
@@ -169,6 +170,11 @@
             <option value="two-sided-long-edge">Double sided (book)</option>
             <option value="two-sided-short-edge">Double sided (flip up)</option>
           </select>
+          <div id="sidesNote" class="hint" hidden>This printer can only print on one side.</div>
+        </div>
+        <div id="paperWrap">
+          <label class="f" for="paper">Paper size</label>
+          <select id="paper"></select>
         </div>
         <div>
           <label class="f" for="pages">Pages (PDF only)</label>
@@ -320,8 +326,29 @@ function renderPrinters() {
   // options the printer can't do
   $('sides').disabled = !(p && p.duplex);
   if (!(p && p.duplex)) $('sides').value = 'one-sided';
+  $('sidesNote').hidden = !p || p.duplex;
   $('colorWrap').style.display = p && p.color ? '' : 'none';
+  renderPaper(p);
 }
+
+const PAPER_LABELS = {
+  'iso_a4_210x297mm': 'A4', 'iso_a3_297x420mm': 'A3 (large)', 'na_letter_8.5x11in': 'Letter',
+  'na_legal_8.5x14in': 'Legal', 'iso_a5_148x210mm': 'A5'
+};
+function renderPaper(p) {
+  const sizes = (p && p.media) || [];
+  const sel = $('paper');
+  const key = sizes.join();
+  if (sel.dataset.key !== key) {  // rebuild only when the printer's sizes change
+    sel.innerHTML = sizes.map(m => `<option value="${m}">${PAPER_LABELS[m] || m}</option>`).join('');
+    sel.dataset.key = key;
+    const want = (prefs.paper || {})[p && p.name];
+    sel.value = sizes.includes(want) ? want : sizes.includes(p && p.media_default) ? p.media_default : sizes[0] || '';
+  }
+  // only worth showing when there is a real choice (e.g. A4 / A3)
+  $('paperWrap').style.display = sizes.length > 1 ? '' : 'none';
+}
+function paperLabel() { return PAPER_LABELS[$('paper').value] || ''; }
 
 function cur() { return state.printers.find(p => p.name === selected); }
 
@@ -384,6 +411,7 @@ function optionSummary(k) {
   bits.push({ 'one-sided':'Single sided', 'two-sided-long-edge':'Double sided (book)', 'two-sided-short-edge':'Double sided (flip up)' }[$('sides').disabled ? 'one-sided' : $('sides').value]);
   if (k === 'pdf') bits.push($('pages').value.trim() ? 'Pages ' + $('pages').value.trim() : 'All pages');
   if ($('orientation').value !== 'auto') bits.push($('orientation').value[0].toUpperCase() + $('orientation').value.slice(1));
+  if (paperLabel()) bits.push(paperLabel().replace(' (large)', ''));
   bits.push(isGray() ? 'Black & white' : 'Colour');
   if ($('fit').checked) bits.push('Fit to page');
   return bits.join(' · ') + (p ? ` · on ${p.info}` : '');
@@ -514,6 +542,7 @@ async function doPrint() {
   fd.append('pages', $('pages').value);
   fd.append('orientation', $('orientation').value);
   fd.append('fit', $('fit').checked ? '1' : '0');
+  if ($('paperWrap').style.display !== 'none' && $('paper').value) fd.append('media', $('paper').value);
   savePrefs();
   const b = $('printBtn');
   b.dataset.busy = 1; b.disabled = true; b.textContent = 'Sending…';
@@ -549,7 +578,8 @@ async function resume() {
 }
 
 function savePrefs() {
-  localStorage.setItem(PREF, JSON.stringify({ printer: selected, sides: $('sides').value, color: $('color').value, fit: $('fit').checked, orientation: $('orientation').value }));
+  if (selected && $('paper').value) prefs.paper = Object.assign(prefs.paper || {}, { [selected]: $('paper').value });
+  localStorage.setItem(PREF, JSON.stringify({ printer: selected, sides: $('sides').value, color: $('color').value, fit: $('fit').checked, orientation: $('orientation').value, paper: prefs.paper || {} }));
 }
 
 // ---- wiring ----
@@ -586,6 +616,7 @@ document.addEventListener('keydown', e => {
 });
 document.querySelectorAll('.stepper button').forEach(b => b.onclick = () => { const c = $('copies'); c.value = Math.min(99, Math.max(1, (+c.value || 1) + +b.dataset.d)); });
 $('printBtn').addEventListener('click', doPrint);
+$('paper').addEventListener('change', savePrefs);
 document.querySelector('aside').addEventListener('click', e => { const b = e.target.closest('[data-cancel]'); if (b) cancelJob(b.dataset.cancel, b.dataset.printer, b); });
 
 if (prefs.sides) $('sides').value = prefs.sides;

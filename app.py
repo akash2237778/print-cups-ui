@@ -250,8 +250,12 @@ class Handler(BaseHTTPRequestHandler):
         if not files:
             return self._error(400, "No file was attached.")
         printer = fields.get("printer", "")
-        if printer not in {p["name"] for p in cups.printers()}:
+        pinfo = next((p for p in cups.printers() if p["name"] == printer), None)
+        if not pinfo:
             return self._error(400, "Please choose a printer.")
+        media = fields.get("media") or None
+        if media and media not in pinfo["media"]:
+            return self._error(400, "That paper size isn't available on this printer.")
 
         copies = max(1, min(99, int(fields.get("copies") or 1)))
         sides = fields.get("sides", "one-sided")
@@ -278,7 +282,7 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             try:
                 job_id = cups.print_document(printer, data, filename, copies, sides, color,
-                                             pages if ext == ".pdf" else None, orientation, fit)
+                                             pages if ext == ".pdf" else None, orientation, fit, media)
                 results.append({"file": filename, "ok": True, "job_id": job_id})
             except IPPError as e:
                 results.append({"file": filename, "ok": False, "error": str(e)})

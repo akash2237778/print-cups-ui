@@ -25,6 +25,9 @@ RANGE = 0x33
 TEXT, NAME, KEYWORD, URI, CHARSET, LANG, MIME = 0x41, 0x42, 0x44, 0x45, 0x47, 0x48, 0x49
 _STRINGS = {0x41, 0x42, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x35, 0x36}
 
+PAPER_SIZES = ["iso_a4_210x297mm", "iso_a3_297x420mm", "na_letter_8.5x11in",
+               "na_legal_8.5x14in", "iso_a5_148x210mm"]
+
 PRINTER_STATES = {3: "idle", 4: "printing", 5: "stopped"}
 JOB_STATES = {3: "pending", 4: "held", 5: "printing", 6: "stopped",
               7: "canceled", 8: "aborted", 9: "completed"}
@@ -159,7 +162,8 @@ class CupsClient:
                 "printer-name", "printer-info", "printer-location", "printer-make-and-model",
                 "printer-state", "printer-state-reasons", "printer-state-message",
                 "printer-is-accepting-jobs", "queued-job-count", "device-uri",
-                "color-supported", "sides-supported", "print-color-mode-supported"]),
+                "color-supported", "sides-supported", "print-color-mode-supported",
+                "media-supported", "media-default"]),
         ])
         out = []
         for tag, g in groups:
@@ -171,6 +175,8 @@ class CupsClient:
             sides = sides if isinstance(sides, list) else [sides]
             modes = g.get("print-color-mode-supported", [])
             modes = modes if isinstance(modes, list) else [modes]
+            media = g.get("media-supported", [])
+            media = media if isinstance(media, list) else [media]
             out.append({
                 "name": g.get("printer-name"),
                 "info": g.get("printer-info") or g.get("printer-name"),
@@ -184,6 +190,9 @@ class CupsClient:
                 "device_uri": g.get("device-uri", ""),
                 "color": bool(g.get("color-supported")) or "color" in modes,
                 "duplex": any(s.startswith("two-sided") for s in sides),
+                # the paper sizes people actually use, in this order
+                "media": [m for m in PAPER_SIZES if m in media],
+                "media_default": g.get("media-default", ""),
             })
         return out
 
@@ -219,7 +228,7 @@ class CupsClient:
 
     # ---------- actions ----------
     def print_document(self, printer, data, filename, copies=1, sides="one-sided",
-                       color="color", page_ranges=None, orientation=None, fit=True):
+                       color="color", page_ranges=None, orientation=None, fit=True, media=None):
         job = [(INTEGER, "copies", int(copies)),
                (KEYWORD, "sides", sides),
                (KEYWORD, "print-color-mode", "monochrome" if color == "grayscale" else "color")]
@@ -231,6 +240,8 @@ class CupsClient:
             job.append((ENUM, "orientation-requested", orientation))
         if fit:
             job.append((KEYWORD, "print-scaling", "fit"))
+        if media:  # CUPS maps this to the driver's PageSize, the printer picks the tray
+            job.append((KEYWORD, "media", media))
         groups = self._request(PRINT_JOB, f"/printers/{printer}", [
             (URI, "printer-uri", self.printer_uri(printer)),
             (NAME, "requesting-user-name", self.user),
