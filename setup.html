@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Add Printers · QuickPrint</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><text y='20' font-size='20'>🖨️</text></svg>">
+<style>
+  :root { --bg:#f1f5f9; --card:#fff; --ink:#1e293b; --muted:#64748b; --line:#e2e8f0;
+          --blue:#2563eb; --blue-d:#1d4ed8; --blue-l:#eff6ff; --green:#16a34a; --green-l:#dcfce7;
+          --amber-l:#fef3c7; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header { background:var(--card); border-bottom:1px solid var(--line); padding:12px 20px; display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:18px; margin:0; }
+  header a { margin-left:auto; color:var(--blue); text-decoration:none; font-size:13px; }
+  main { max-width:820px; margin:0 auto; padding:20px; }
+  @media (max-width:600px) { main { padding:12px; } }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; margin-bottom:16px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:0 0 10px; }
+  .notice { background:var(--amber-l); color:#78350f; border-radius:8px; padding:10px 12px; font-size:13px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+  .tab { border:1.5px solid var(--line); background:#fff; border-radius:99px; padding:7px 14px; font:inherit; font-weight:600; cursor:pointer; color:var(--ink); }
+  .tab.on { border-color:var(--blue); background:var(--blue-l); color:var(--blue); }
+  .pane { display:none; } .pane.on { display:block; }
+  ol { padding-left:20px; margin:0; } ol li { margin:8px 0; }
+  .addr { display:flex; align-items:center; gap:8px; border:1px solid var(--line); border-radius:8px; padding:8px 10px; margin:6px 0; background:#f8fafc; }
+  .addr .nm { font-weight:600; min-width:0; }
+  .addr code { flex:1; font:12px ui-monospace,Consolas,monospace; word-break:break-all; color:#0f172a; }
+  .btn { border:0; border-radius:8px; padding:6px 12px; font:inherit; font-weight:600; cursor:pointer; background:#f1f5f9; border:1px solid var(--line); color:var(--ink); white-space:nowrap; }
+  .btn:hover { background:#e2e8f0; }
+  .btn.primary { background:var(--blue); border-color:var(--blue); color:#fff; padding:11px 18px; font-size:15px; display:inline-block; text-decoration:none; }
+  .btn.primary:hover { background:var(--blue-d); }
+  .btn.ok { background:var(--green-l); color:var(--green); border-color:#bbf7d0; }
+  .ui { font-weight:600; background:#f1f5f9; border-radius:4px; padding:0 4px; }
+  .tip { font-size:13px; color:var(--muted); margin-top:10px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:6px 0; }
+  .kv b { color:var(--muted); font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <span style="font-size:22px">🖨️</span><h1>Add office printers to your device</h1>
+  <a href="/">← Back to QuickPrint</a>
+</header>
+<main>
+  <div class="card">
+    <div class="notice">📶 <b>Tailscale must be on</b> on your device to print from outside the office. Inside the office it works the same way.
+      Printer server address: <b id="hostTxt">…</b></div>
+  </div>
+
+  <div class="card">
+    <h2>Your printers</h2>
+    <div id="addrs">Loading…</div>
+    <div class="tip">You'll paste one of these addresses in the steps below. Add both printers if you use both.</div>
+  </div>
+
+  <div class="card">
+    <h2>Choose your device</h2>
+    <div class="tabs">
+      <button class="tab" data-os="win">💻 Windows</button>
+      <button class="tab" data-os="mac">🍎 Mac</button>
+      <button class="tab" data-os="ios">📱 iPhone / iPad</button>
+      <button class="tab" data-os="android">🤖 Android</button>
+    </div>
+
+    <div class="pane" id="win">
+      <ol>
+        <li>Open <span class="ui">Settings → Bluetooth &amp; devices → Printers &amp; scanners</span> (Windows 10: <span class="ui">Devices → Printers &amp; scanners</span>).</li>
+        <li>Click <span class="ui">Add device</span>, wait a few seconds, then click <span class="ui">Add manually</span> (Windows 10: <span class="ui">The printer that I want isn't listed</span>).</li>
+        <li>Choose <span class="ui">Select a shared printer by name</span> and paste a printer's <b>Windows / Mac</b> address from above (it starts with <code>http://</code>). Click <span class="ui">Next</span>.</li>
+        <li>When Windows asks for a driver, pick Manufacturer <span class="ui">Microsoft</span> → <span class="ui">Microsoft IPP Class Driver</span> (older Windows: <span class="ui">Microsoft PS Class Driver</span>). <b>Don't</b> choose <span class="ui">Generic / Text Only</span> — it can only print plain text.</li>
+        <li>Already added it with another driver? Open the printer → <span class="ui">Printer properties → Advanced → Driver</span> and pick <span class="ui">Microsoft IPP Class Driver</span>.</li>
+        <li>Finish, then print a test page if you like.</li>
+        <li><b>Make it the default:</b> in <span class="ui">Printers &amp; scanners</span> turn off <span class="ui">Let Windows manage my default printer</span>, open the printer and click <span class="ui">Set as default</span>.</li>
+      </ol>
+    </div>
+
+    <div class="pane" id="mac">
+      <ol>
+        <li>Open <span class="ui">System Settings → Printers &amp; Scanners</span> and click <span class="ui">Add Printer, Scanner or Fax…</span></li>
+        <li>Click the <span class="ui">IP</span> tab (globe icon) and fill in:
+          <div class="kv"><b>Address</b><span><code class="hostc">…</code></span>
+            <b>Protocol</b><span>Internet Printing Protocol – IPP</span>
+            <b>Queue</b><span>the <b>Queue</b> value shown for the printer above (e.g. <code>printers/HP_A4</code>)</span></div></li>
+        <li>For <span class="ui">Use</span>, pick <span class="ui">Secure AirPrint</span> / <span class="ui">AirPrint</span> if offered, otherwise <span class="ui">Generic PostScript Printer</span>. Click <span class="ui">Add</span>.</li>
+        <li><b>Make it the default:</b> in <span class="ui">Printers &amp; Scanners</span> set <span class="ui">Default printer</span> to it.</li>
+      </ol>
+    </div>
+
+    <div class="pane" id="ios">
+      <p>iPhones only find printers on the same Wi-Fi, so we install a small settings profile that tells your phone where the office printers are. You do this once.</p>
+      <ol>
+        <li>Open <b>this page in Safari</b> (other browsers can't install profiles).</li>
+        <li><a class="btn primary" href="/setup/office-printers.mobileconfig">⬇ Download printer profile</a> — tap <span class="ui">Allow</span>.</li>
+        <li>Open the <span class="ui">Settings</span> app → tap <span class="ui">Profile Downloaded</span> near the top (or <span class="ui">General → VPN &amp; Device Management</span>) → <span class="ui">Install</span> → enter your passcode → <span class="ui">Install</span>. It says “Unverified” because it's our own office profile — that's expected.</li>
+        <li>To print: in any app tap <span class="ui">Share</span> (□↑) → <span class="ui">Print</span> → <span class="ui">Printer</span> and choose an office printer. Your iPhone remembers the last printer you used.</li>
+      </ol>
+      <div class="tip">To remove it later: <span class="ui">Settings → General → VPN &amp; Device Management → Office printers → Remove Profile</span>.</div>
+    </div>
+
+    <div class="pane" id="android">
+      <p>Android's built-in printing only finds printers on the same Wi-Fi. Two options:</p>
+      <ol>
+        <li><b>Easiest – QuickPrint as an app:</b> open <a href="/">QuickPrint</a> in Chrome → <span class="ui">⋮ → Add to Home screen</span>. Print by opening it and choosing files (PDF, photos, screenshots).</li>
+        <li><b>Print from any app:</b> install a print plugin from the Play Store that lets you type a printer address, such as <span class="ui">CUPS Printing</span> or <span class="ui">Let's Print Droid</span>. Add a printer using the <b>Android</b> address from above (it starts with <code>ipp://</code>), then enable the plugin in <span class="ui">Settings → Connected devices → Printing</span>. It then appears under <span class="ui">Share → Print</span> in every app.</li>
+      </ol>
+      <div class="tip">Android has no “default printer” setting — it shows the printer you used last.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function pick(os) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.os === os));
+  document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === os));
+}
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => pick(t.dataset.os));
+const ua = navigator.userAgent;
+pick(/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) ? 'ios'
+   : /Android/.test(ua) ? 'android' : /Mac OS X|Macintosh/.test(ua) ? 'mac' : 'win');
+
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch { const t = document.createElement('textarea'); t.value = text; document.body.append(t); t.select(); document.execCommand('copy'); t.remove(); }
+  btn.textContent = 'Copied ✓'; btn.classList.add('ok');
+  setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('ok'); }, 1800);
+}
+
+fetch('/api/share').then(r => r.json()).then(d => {
+  const hp = d.port === 631 ? d.host + ':631' : d.host + ':' + d.port;
+  $('hostTxt').textContent = d.host;
+  document.querySelectorAll('.hostc').forEach(e => e.textContent = d.host);
+  $('addrs').innerHTML = d.printers.map(p => `
+    <div style="margin-bottom:12px">
+      <div class="nm">${esc(p.info)} <span style="color:var(--muted);font-weight:400;font-size:12px">${esc(p.model)}</span></div>
+      <div class="addr"><span style="font-size:12px;color:var(--muted);width:92px">Windows / Mac</span><code>http://${esc(hp)}/printers/${esc(p.name)}</code><button class="btn" data-c="http://${esc(hp)}/printers/${esc(p.name)}">Copy</button></div>
+      <div class="addr"><span style="font-size:12px;color:var(--muted);width:92px">Android</span><code>ipp://${esc(hp)}/printers/${esc(p.name)}</code><button class="btn" data-c="ipp://${esc(hp)}/printers/${esc(p.name)}">Copy</button></div>
+      <div class="addr"><span style="font-size:12px;color:var(--muted);width:92px">Mac queue</span><code>printers/${esc(p.name)}</code><button class="btn" data-c="printers/${esc(p.name)}">Copy</button></div>
+    </div>`).join('');
+}).catch(() => { $('addrs').textContent = 'Could not load the printer list — is the print server online?'; });
+
+document.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) copy(b.dataset.c, b); });
+</script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 # QuickPrint - standard library only, no pip install needed.
 FROM python:3.11-slim
 WORKDIR /app
-COPY app.py ipp.py index.html ./
+COPY app.py ipp.py index.html setup.html ./
 COPY static ./static
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000

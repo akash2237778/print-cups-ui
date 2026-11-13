@@ -9,6 +9,8 @@ Environment:
   CUPS_ADMIN_PASSWORD  and cancelling any job
   PORT                 port to listen on                 (default 8000)
   MAX_UPLOAD_MB        per-request upload limit          (default 50)
+  PRINT_SHARE_HOST     address devices use to reach CUPS directly, e.g. the
+                       NAS's Tailscale IP (default: host the page was opened on)
 """
 import email.parser
 import email.policy
@@ -31,6 +33,8 @@ MAX_UPLOAD = int(os.environ.get("MAX_UPLOAD_MB", "50")) * 1024 * 1024
 cups = CupsClient(CUPS_SERVER, CUPS_PORT,
                   admin_user=os.environ.get("CUPS_ADMIN_USER") or None,
                   admin_password=os.environ.get("CUPS_ADMIN_PASSWORD") or None)
+
+SHARE_HOST = os.environ.get("PRINT_SHARE_HOST", "").strip()
 
 PRINTABLE = {".pdf", ".jpg", ".jpeg", ".png", ".gif", ".tif", ".tiff", ".bmp", ".txt", ".ps"}
 OFFICE = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".odt", ".ods", ".rtf"}
@@ -88,6 +92,41 @@ def status_snapshot():
             "can_admin": cups.can_admin, "cups_url": f"http://{CUPS_SERVER}:{CUPS_PORT}"}
 
 
+def airprint_profile(host, port, printers):
+    """iOS/iPadOS configuration profile that adds the CUPS queues as AirPrint printers
+    (needed because iPhones only discover printers via Bonjour, which doesn't cross Tailscale)."""
+    from uuid import NAMESPACE_DNS, uuid5
+    from xml.sax.saxutils import escape as x
+
+    entries = "".join(
+        "<dict><key>IPAddress</key><string>%s</string><key>Port</key><integer>%d</integer>"
+        "<key>ResourcePath</key><string>printers/%s</string><key>ForceTLS</key><false/></dict>"
+        % (x(host), port, x(p["name"])) for p in printers)
+    inner = str(uuid5(NAMESPACE_DNS, f"airprint.{host}.quickprint"))
+    outer = str(uuid5(NAMESPACE_DNS, f"profile.{host}.quickprint"))
+    names = ", ".join(p["info"] for p in printers)
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>PayloadContent</key><array><dict>
+<key>AirPrint</key><array>{entries}</array>
+<key>PayloadDisplayName</key><string>Office printers</string>
+<key>PayloadIdentifier</key><string>local.quickprint.airprint.{inner}</string>
+<key>PayloadType</key><string>com.apple.airprint</string>
+<key>PayloadUUID</key><string>{inner}</string>
+<key>PayloadVersion</key><integer>1</integer>
+</dict></array>
+<key>PayloadDescription</key><string>Adds the office printers ({x(names)}) to the Print menu. Tailscale must be connected to print.</string>
+<key>PayloadDisplayName</key><string>Office printers (QuickPrint)</string>
+<key>PayloadIdentifier</key><string>local.quickprint.profile.{outer}</string>
+<key>PayloadRemovalDisallowed</key><false/>
+<key>PayloadType</key><string>Configuration</string>
+<key>PayloadUUID</key><string>{outer}</string>
+<key>PayloadVersion</key><integer>1</integer>
+</dict></plist>
+""".encode()
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "QuickPrint/2"
 
@@ -103,6 +142,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(data)
+
+    def _share_host(self):
+        if SHARE_HOST:
+            return SHARE_HOST
+        host = (self.headers.get("Host") or CUPS_SERVER).strip()
+        return host[1:].split("]")[0] if host.startswith("[") else host.rsplit(":", 1)[0]
 
     STATIC_TYPES = {".mjs": "text/javascript", ".js": "text/javascript", ".css": "text/css"}
 
@@ -139,6 +184,22 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 with open(os.path.join(HERE, "index.html"), "rb") as f:
                     return self._send(200, f.read(), "text/html; charset=utf-8")
+            if path in ("/setup", "/setup/"):
+                with open(os.path.join(HERE, "setup.html"), "rb") as f:
+                    return self._send(200, f.read(), "text/html; charset=utf-8")
+            if path == "/api/share":
+                return self._send(200, {"host": self._share_host(), "port": CUPS_PORT,
+                                        "printers": [{"name": p["name"], "info": p["info"], "model": p["model"]}
+                                                     for p in cups.printers()]})
+            if path == "/setup/office-printers.mobileconfig":
+                data = airprint_profile(self._share_host(), CUPS_PORT, cups.printers())
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-apple-aspen-config")
+                self.send_header("Content-Disposition", 'attachment; filename="office-printers.mobileconfig"')
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             if path.startswith("/static/"):
                 return self._static(path)
             if path == "/healthz":
