@@ -59,6 +59,28 @@ def parse_pages(text):
     return ranges
 
 
+PAPER_POINTS = {"iso_a4_210x297mm": (595, 842), "iso_a3_297x420mm": (842, 1191),
+                "na_letter_8.5x11in": (612, 792), "na_legal_8.5x14in": (612, 1008),
+                "iso_a5_148x210mm": (420, 595)}
+
+
+def blank_pdf(media):
+    """One empty page - fed through to keep manual double-sided sheets in step."""
+    w, h = PAPER_POINTS.get(media or "", (595, 842))
+    objs = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {w} {h}] /Contents 4 0 R >>",
+            "<< /Length 0 >>\nstream\n\nendstream"]
+    out, offs = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        offs.append(len(out))
+        out += f"{i} 0 obj\n{o}\nendobj\n".encode()
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{o:010d} 00000 n \n".encode() for o in offs)
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return out
+
+
 def parse_multipart(content_type, body):
     msg = email.parser.BytesParser(policy=email.policy.HTTP).parsebytes(
         b"Content-Type: " + content_type.encode() + b"\r\n\r\n" + body)
@@ -264,8 +286,23 @@ class Handler(BaseHTTPRequestHandler):
         pages = parse_pages(fields.get("pages"))
         orientation = {"portrait": 3, "landscape": 4}.get(fields.get("orientation"))
         fit = fields.get("fit", "1") != "0"
+        # manual double-sided helpers (sent only for the "backs" pass)
+        reverse = fields.get("order") == "reverse"
+        if fields.get("rotate") == "1":  # backs came out upside down -> turn them 180 degrees
+            orientation = {3: 6, 4: 5}.get(orientation, 6)
+        blank = fields.get("blank")  # "before" / "after": feed one empty sheet
 
         results = []
+
+        def feed_blank():
+            try:
+                cups.print_document(printer, blank_pdf(media), "blank sheet", 1, "one-sided",
+                                    "grayscale", None, None, False, media)
+            except IPPError as e:
+                results.append({"file": "blank sheet", "ok": False, "error": str(e)})
+
+        if blank == "before":
+            feed_blank()
         for filename, data in files:
             ext = os.path.splitext(filename)[1].lower()
             if ext in OFFICE:
@@ -282,10 +319,13 @@ class Handler(BaseHTTPRequestHandler):
                 continue
             try:
                 job_id = cups.print_document(printer, data, filename, copies, sides, color,
-                                             pages if ext == ".pdf" else None, orientation, fit, media)
+                                             pages if ext == ".pdf" else None, orientation, fit, media,
+                                             reverse)
                 results.append({"file": filename, "ok": True, "job_id": job_id})
             except IPPError as e:
                 results.append({"file": filename, "ok": False, "error": str(e)})
+        if blank == "after":
+            feed_blank()
         ok = any(r["ok"] for r in results)
         return self._send(200 if ok else 422, {"results": results})
 

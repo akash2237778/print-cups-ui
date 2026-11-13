@@ -123,6 +123,12 @@
   .sheet.txt { aspect-ratio:auto; min-height:70vh; height:auto; overflow:visible; }
   .sheet pre { margin:0; width:100%; font:12px/1.4 ui-monospace,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
   @media (max-width: 600px) { .pv { padding:0; } .pv-box { height:100%; border-radius:0; } .actions { flex-direction:column-reverse; } }
+  .dx-box { height:auto; max-height:92vh; width:min(560px,100%); }
+  .dx-body { padding:14px 18px; overflow:auto; }
+  .dx-body ol { padding-left:20px; margin:12px 0; } .dx-body li { margin:8px 0; }
+  .dx-body li.muted { color:var(--muted); font-size:13px; }
+  .dx-fix { margin-top:6px; font-size:13px; } .dx-fix summary { cursor:pointer; color:var(--blue); font-weight:600; }
+  @media (max-width:600px) { .dx-box { height:100%; max-height:none; } }
   #toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#1e293b; color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; opacity:0; transition:.2s; pointer-events:none; }
   #toast.show { opacity:1; }
 </style>
@@ -170,7 +176,7 @@
             <option value="two-sided-long-edge">Double sided (book)</option>
             <option value="two-sided-short-edge">Double sided (flip up)</option>
           </select>
-          <div id="sidesNote" class="hint" hidden>This printer can only print on one side.</div>
+          <div id="sidesNote" class="hint" hidden>Prints the fronts, then tells you how to put the paper back for the backs. One PDF, 1 copy at a time.</div>
         </div>
         <div id="paperWrap">
           <label class="f" for="paper">Paper size</label>
@@ -217,6 +223,26 @@
     </div>
   </aside>
 </main>
+<div id="dx" class="pv" hidden>
+  <div class="pv-box dx-box" role="dialog" aria-modal="true" aria-labelledby="dxTitle">
+    <div class="pv-head"><div class="pv-title" id="dxTitle">🔄 Now turn the paper over</div></div>
+    <div class="dx-body">
+      <div id="dxInfo" class="msg ok"></div>
+      <ol id="dxSteps"></ol>
+      <details class="dx-fix">
+        <summary>Backs came out wrong?</summary>
+        <label class="chk"><input type="checkbox" id="dxAsis"> Backs printed over the fronts → put pages back <b>without</b> turning them over</label>
+        <label class="chk"><input type="checkbox" id="dxRotate"> Backs are upside down → turn them round</label>
+        <div class="hint">Saved for this printer and paper size.</div>
+      </details>
+    </div>
+    <div class="pv-foot">
+      <button id="dxCancel" class="btn sm">Cancel backs</button>
+      <span style="flex:1"></span>
+      <button id="dxGo" class="btn pv-print">Print backs</button>
+    </div>
+  </div>
+</div>
 <div id="pv" class="pv" hidden>
   <div class="pv-box" role="dialog" aria-modal="true" aria-labelledby="pvName">
     <div class="pv-head">
@@ -324,11 +350,34 @@ function renderPrinters() {
   $('printerNotice').innerHTML = n;
   if ($('resumeBtn')) $('resumeBtn').onclick = resume;
   // options the printer can't do
-  $('sides').disabled = !(p && p.duplex);
-  if (!(p && p.duplex)) $('sides').value = 'one-sided';
-  $('sidesNote').hidden = !p || p.duplex;
+  renderSides(p);
   $('colorWrap').style.display = p && p.color ? '' : 'none';
   renderPaper(p);
+}
+
+const SIDES_AUTO = [['one-sided', 'Single sided'], ['two-sided-long-edge', 'Double sided (book)'], ['two-sided-short-edge', 'Double sided (flip up)']];
+const SIDES_MANUAL = [['one-sided', 'Single sided'], ['manual', 'Double sided – I turn the paper over']];
+function renderSides(p) {
+  const opts = p && !p.duplex ? SIDES_MANUAL : SIDES_AUTO;
+  const sel = $('sides'), key = opts.map(o => o[0]).join();
+  if (sel.dataset.key !== key) {
+    const want = sel.dataset.key ? sel.value : (prefs.sides || 'one-sided');
+    sel.innerHTML = opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+    sel.dataset.key = key;
+    // "double sided" carries over between automatic and manual printers
+    const map = { manual: p && p.duplex ? 'two-sided-long-edge' : 'manual',
+                  'two-sided-long-edge': 'manual', 'two-sided-short-edge': 'manual' };
+    sel.value = opts.some(o => o[0] === want) ? want : (opts.some(o => o[0] === map[want]) ? map[want] : 'one-sided');
+  }
+  sel.disabled = !p;
+  sidesChanged();
+}
+function sidesChanged() {
+  const manual = isManual();
+  $('sidesNote').hidden = !manual;
+  $('copies').disabled = manual;
+  document.querySelectorAll('.stepper button').forEach(b => b.disabled = manual);
+  if (manual) $('copies').value = 1;
 }
 
 const PAPER_LABELS = {
@@ -408,7 +457,7 @@ function previewable() { return files.filter(f => !fileProblem(f) && kind(f)); }
 function optionSummary(k) {
   const p = cur(), c = +$('copies').value || 1;
   const bits = [c > 1 ? `${c} copies` : '1 copy'];
-  bits.push({ 'one-sided':'Single sided', 'two-sided-long-edge':'Double sided (book)', 'two-sided-short-edge':'Double sided (flip up)' }[$('sides').disabled ? 'one-sided' : $('sides').value]);
+  bits.push({ 'one-sided':'Single sided', 'two-sided-long-edge':'Double sided (book)', 'two-sided-short-edge':'Double sided (flip up)', 'manual':'Double sided (you turn the paper)' }[$('sides').value] || 'Single sided');
   if (k === 'pdf') bits.push($('pages').value.trim() ? 'Pages ' + $('pages').value.trim() : 'All pages');
   if ($('orientation').value !== 'auto') bits.push($('orientation').value[0].toUpperCase() + $('orientation').value.slice(1));
   if (paperLabel()) bits.push(paperLabel().replace(' (large)', ''));
@@ -472,15 +521,10 @@ async function renderPdf(f, url, body) {
   const token = ++pvToken;
   body.innerHTML = '<div class="pv-hint">Loading preview…</div>';
   try {
-    if (!pdfjs) {
-      pdfjs = await import('/static/pdfjs/pdf.min.mjs');
-      pdfjs.GlobalWorkerOptions.workerSrc = '/static/pdfjs/pdf.worker.min.mjs';
-    }
-    if (!f._pdf) f._pdf = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
-    const doc = f._pdf;
+    const doc = await loadPdf(f);
     const pages = pagesToPrint(doc.numPages);
     if (token !== pvToken) return;
-    const sheetsPerCopy = $('sides').value !== 'one-sided' && !$('sides').disabled ? Math.ceil(pages.length / 2) : pages.length;
+    const sheetsPerCopy = $('sides').value !== 'one-sided' ? Math.ceil(pages.length / 2) : pages.length;
     const copies = +$('copies').value || 1;
     let head = `<div class="pv-info">PDF has ${doc.numPages} page${doc.numPages > 1 ? 's' : ''} · printing ${pages.length}` +
       ` → about ${sheetsPerCopy * copies} sheet${sheetsPerCopy * copies === 1 ? '' : 's'} of paper</div>`;
@@ -530,24 +574,42 @@ function renderButton() {
   else b.textContent = `Print ${good.length > 1 ? good.length+' files' : '“'+good[0].name+'”'} on ${p.info}`;
 }
 
+function isManual() { return $('sides').value === 'manual'; }
+function mediaValue() { return $('paperWrap').style.display !== 'none' ? $('paper').value : ''; }
+
+function printForm(list, pages, extra = {}) {
+  const fd = new FormData();
+  list.forEach(f => fd.append('file', f, f.name));
+  fd.append('printer', selected);
+  fd.append('copies', isManual() ? 1 : ($('copies').value || 1));
+  fd.append('sides', isManual() ? 'one-sided' : $('sides').value);
+  fd.append('color_mode', $('color').value);
+  fd.append('pages', pages);
+  fd.append('orientation', $('orientation').value);
+  fd.append('fit', $('fit').checked ? '1' : '0');
+  if (mediaValue()) fd.append('media', mediaValue());
+  for (const [k, v] of Object.entries(extra)) if (v) fd.append(k, v);
+  return fd;
+}
+
+async function loadPdf(f) {
+  if (!pdfjs) {
+    pdfjs = await import('/static/pdfjs/pdf.min.mjs');
+    pdfjs.GlobalWorkerOptions.workerSrc = '/static/pdfjs/pdf.worker.min.mjs';
+  }
+  if (!f._pdf) f._pdf = await pdfjs.getDocument({ data: new Uint8Array(await f.arrayBuffer()) }).promise;
+  return f._pdf;
+}
+
 async function doPrint() {
   const good = files.filter(f => !fileProblem(f));
   if (!good.length || !selected) return;
-  const fd = new FormData();
-  good.forEach(f => fd.append('file', f, f.name));
-  fd.append('printer', selected);
-  fd.append('copies', $('copies').value || 1);
-  fd.append('sides', $('sides').disabled ? 'one-sided' : $('sides').value);
-  fd.append('color_mode', $('color').value);
-  fd.append('pages', $('pages').value);
-  fd.append('orientation', $('orientation').value);
-  fd.append('fit', $('fit').checked ? '1' : '0');
-  if ($('paperWrap').style.display !== 'none' && $('paper').value) fd.append('media', $('paper').value);
   savePrefs();
+  if (isManual()) return manualDuplex(good);
   const b = $('printBtn');
   b.dataset.busy = 1; b.disabled = true; b.textContent = 'Sending…';
   try {
-    const data = await api('/api/print', { method:'POST', body: fd });
+    const data = await api('/api/print', { method:'POST', body: printForm(good, $('pages').value) });
     const ok = data.results.filter(r => r.ok), bad = data.results.filter(r => !r.ok);
     let html = '';
     if (ok.length) html += `<div class="msg ok">✓ Sent ${ok.length} file${ok.length>1?'s':''} to ${esc(cur().info)}${cur().state==='stopped'?' – it will print once the printer is resumed':''}.</div>`;
@@ -560,6 +622,82 @@ async function doPrint() {
   } finally {
     delete b.dataset.busy; renderButton();
   }
+}
+
+// ---- manual double-sided: print fronts, user turns the stack over, print backs ----
+function trayName(p, media) {
+  if (/M43\d/.test(p.name + p.info)) return media === 'iso_a3_297x420mm' ? 'Tray 2 (the A3 paper drawer)' : 'Tray 1 (the A4 manual tray)';
+  return 'the paper tray';
+}
+function dxKey() { return selected + '|' + (mediaValue() || '-'); }
+function dxSettings() { return Object.assign({ asis: false, rotate: false }, (prefs.dx || {})[dxKey()]); }
+function saveDx(s) { prefs.dx = Object.assign(prefs.dx || {}, { [dxKey()]: s }); savePrefs(); }
+
+async function manualDuplex(good) {
+  const msg = (cls, t) => $('result').innerHTML = `<div class="msg ${cls}">${t}</div>`;
+  if (good.length !== 1 || kind(good[0]) !== 'pdf')
+    return msg('bad', '✕ Manual double-sided works with <b>one PDF at a time</b>. Remove the other files, or choose Single sided.');
+  const f = good[0], p = cur(), b = $('printBtn');
+  b.dataset.busy = 1; b.disabled = true; b.textContent = 'Preparing…';
+  try {
+    const doc = await loadPdf(f);
+    const pages = pagesToPrint(doc.numPages);
+    if (!pages.length) throw new Error(`No pages match "${$('pages').value}".`);
+    if (pages.length === 1) {  // nothing to put on a back
+      await api('/api/print', { method: 'POST', body: printForm([f], String(pages[0])) });
+      msg('ok', `✓ Only one page – sent single-sided to ${esc(p.info)}.`);
+      return finishManual(f);
+    }
+    const fronts = pages.filter((_, i) => i % 2 === 0), backs = pages.filter((_, i) => i % 2 === 1);
+    b.textContent = 'Printing fronts…';
+    const r1 = await api('/api/print', { method: 'POST', body: printForm([f], fronts.join(',')) });
+    if (!r1.results.some(r => r.ok)) throw new Error(r1.results.map(r => r.error).join(' '));
+    msg('ok', `✓ Fronts sent (pages ${fronts.join(', ')}). Follow the steps to print the backs.`);
+    refresh();
+    const go = await flipDialog(p, fronts, backs);
+    if (!go) { msg('ok', '✓ Fronts printed. Backs were not printed.'); return; }
+    const s = dxSettings(), extra = fronts.length > backs.length;
+    b.textContent = 'Printing backs…';
+    const r2 = await api('/api/print', { method: 'POST', body: printForm([f], backs.join(','), {
+      order: s.asis ? 'reverse' : '', rotate: s.rotate ? '1' : '',
+      blank: extra ? (s.asis ? 'before' : 'after') : '' }) });
+    if (!r2.results.some(r => r.ok)) throw new Error(r2.results.map(r => r.error).join(' '));
+    msg('ok', `✓ Backs sent (pages ${backs.join(', ')}). If they came out on the wrong side or upside down, ` +
+      `open “Backs came out wrong?” next time – QuickPrint remembers the fix for this printer.`);
+    finishManual(f);
+  } catch (e) {
+    msg('bad', '✕ ' + esc(e.message));
+  } finally {
+    delete b.dataset.busy; renderButton(); refresh();
+  }
+}
+function finishManual(f) { files = files.filter(x => x !== f); $('pages').value = ''; renderFiles(); }
+
+function flipDialog(p, fronts, backs) {
+  return new Promise(resolve => {
+    const tray = trayName(p, mediaValue()), odd = fronts.length > backs.length;
+    const render = () => {
+      const s = dxSettings();
+      $('dxSteps').innerHTML = `
+        <li>Wait until all <b>${fronts.length} sheet${fronts.length > 1 ? 's' : ''}</b> have come out.</li>
+        <li>Take them out of the output tray <b>without changing their order</b>.</li>
+        ${s.asis
+          ? `<li><b>Don't turn them over.</b> Put the stack straight into <b>${tray}</b>, printed side <b>down</b>, top of the page going into the printer first.</li>`
+          : `<li><b>Turn the whole stack over</b> (like turning a page in a book) so the printed side faces <b>up</b>, top of the page still going into the printer first.</li>
+             <li>Put the stack into <b>${tray}</b>.</li>`}
+        ${odd ? `<li class="muted">The last page has no back${s.asis ? ' – a blank sheet goes through first to skip it' : ' – a blank sheet goes through at the end to push it out'}.</li>` : ''}`;
+      $('dxAsis').checked = s.asis; $('dxRotate').checked = s.rotate;
+    };
+    $('dxInfo').textContent = `Fronts sent to ${p.info}: pages ${fronts.join(', ')}.`;
+    $('dxGo').textContent = `Print backs (pages ${backs.join(', ')})`;
+    $('dxAsis').onchange = () => { saveDx({ ...dxSettings(), asis: $('dxAsis').checked }); render(); };
+    $('dxRotate').onchange = () => { saveDx({ ...dxSettings(), rotate: $('dxRotate').checked }); render(); };
+    render();
+    $('dx').hidden = false;
+    const done = v => { $('dx').hidden = true; $('dxGo').onclick = $('dxCancel').onclick = null; resolve(v); };
+    $('dxGo').onclick = () => done(true);
+    $('dxCancel').onclick = () => done(false);
+  });
 }
 
 async function cancelJob(id, printer, btn) {
@@ -617,9 +755,9 @@ document.addEventListener('keydown', e => {
 document.querySelectorAll('.stepper button').forEach(b => b.onclick = () => { const c = $('copies'); c.value = Math.min(99, Math.max(1, (+c.value || 1) + +b.dataset.d)); });
 $('printBtn').addEventListener('click', doPrint);
 $('paper').addEventListener('change', savePrefs);
+$('sides').addEventListener('change', () => { sidesChanged(); savePrefs(); });
 document.querySelector('aside').addEventListener('click', e => { const b = e.target.closest('[data-cancel]'); if (b) cancelJob(b.dataset.cancel, b.dataset.printer, b); });
 
-if (prefs.sides) $('sides').value = prefs.sides;
 if (prefs.color) $('color').value = prefs.color;
 if (prefs.orientation) $('orientation').value = prefs.orientation;
 if (prefs.fit === false) $('fit').checked = false;

@@ -228,7 +228,8 @@ class CupsClient:
 
     # ---------- actions ----------
     def print_document(self, printer, data, filename, copies=1, sides="one-sided",
-                       color="color", page_ranges=None, orientation=None, fit=True, media=None):
+                       color="color", page_ranges=None, orientation=None, fit=True, media=None,
+                       reverse=False):
         job = [(INTEGER, "copies", int(copies)),
                (KEYWORD, "sides", sides),
                (KEYWORD, "print-color-mode", "monochrome" if color == "grayscale" else "color")]
@@ -236,8 +237,10 @@ class CupsClient:
             job.append((NAME, "ColorModel", "Gray"))
         if page_ranges:
             job.append((RANGE, "page-ranges", page_ranges))
-        if orientation in (3, 4):
+        if orientation in (3, 4, 5, 6):  # 5/6 = landscape/portrait turned 180 degrees
             job.append((ENUM, "orientation-requested", orientation))
+        if reverse:  # last page first (CUPS pdftopdf option)
+            job.append((KEYWORD, "outputorder", "reverse"))
         if fit:
             job.append((KEYWORD, "print-scaling", "fit"))
         if media:  # CUPS maps this to the driver's PageSize, the printer picks the tray
